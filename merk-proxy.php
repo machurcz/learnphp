@@ -11,8 +11,14 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Načtení konfigurace
-require_once 'config.php';
+// Načtení konfigurace - automatická detekce prostředí
+if (getenv('GAE_ENV') || getenv('APP_ENV') === 'production') {
+    // Produkční prostředí (GCP)
+    require_once 'config.production.php';
+} else {
+    // Lokální vývoj
+    require_once 'config.php';
+}
 
 // Kontrola metody
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

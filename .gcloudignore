@@ -1,0 +1,19 @@
+# Gitignore soubory
+.gitignore
+.git/
+.github/
+
+# Local config (bude nahrazen na GCP)
+config.php
+
+# Registrace (lokální data)
+registrace.json
+
+# README
+README.md
+
+# Různé
+*.log
+.DS_Store
+.vscode/
+.idea/

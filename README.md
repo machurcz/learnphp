@@ -85,3 +85,51 @@ learnphp/
 - Ochrana proti XSS pomocí `htmlspecialchars()` a `escapeHtml()`
 - Validace na straně serveru i klienta
 - CORS povoleno pouze pro lokální vývoj
+
+## Nasazení na Google Cloud Platform
+
+Aplikace je připravena pro nasazení na GCP App Engine.
+
+### Rychlé nasazení
+
+1. **Nainstalujte Google Cloud SDK**
+   ```bash
+   curl https://sdk.cloud.google.com | bash
+   ```
+
+2. **Přihlaste se**
+   ```bash
+   gcloud auth login
+   ```
+
+3. **Spusťte deploy script**
+   ```bash
+   ./deploy.sh
+   ```
+
+Script vás provede celým procesem nasazení!
+
+### Manuální nasazení
+
+```bash
+# Vytvoření projektu
+gcloud projects create learnphp-app
+gcloud config set project learnphp-app
+
+# Inicializace App Engine (region pro ČR: europe-west3)
+gcloud app create --region=europe-west3
+
+# Nasazení
+gcloud app deploy
+
+# Otevření aplikace
+gcloud app browse
+```
+
+**Podrobné instrukce:** Viz [DEPLOY_GCP.md](DEPLOY_GCP.md)
+
+### Náklady GCP
+
+- První 28 hodin instance/den **ZDARMA**
+- První 1 GB traffic/den **ZDARMA**
+- Pro malou aplikaci = **prakticky zdarma**
