@@ -109,6 +109,71 @@
             color: #777;
             margin-top: 5px;
         }
+
+        /* Autocomplete styles */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #667eea;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .autocomplete-suggestions.show {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background-color: #f0f0ff;
+        }
+
+        .suggestion-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .suggestion-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .loading {
+            padding: 12px;
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .no-results {
+            padding: 12px;
+            text-align: center;
+            color: #999;
+        }
     </style>
 </head>
 <body>
@@ -188,13 +253,19 @@
         <form method="POST" action="">
             <div class="form-group">
                 <label for="firma">Název firmy <span class="required">*</span></label>
-                <input
-                    type="text"
-                    id="firma"
-                    name="firma"
-                    value="<?php echo htmlspecialchars($_POST['firma'] ?? ''); ?>"
-                    required
-                >
+                <div class="autocomplete-wrapper">
+                    <input
+                        type="text"
+                        id="firma"
+                        name="firma"
+                        value="<?php echo htmlspecialchars($_POST['firma'] ?? ''); ?>"
+                        autocomplete="off"
+                        placeholder="Začněte psát název firmy..."
+                        required
+                    >
+                    <div class="autocomplete-suggestions" id="suggestions"></div>
+                </div>
+                <div class="info-text">Našeptávač firem od 3 znaků</div>
             </div>
 
             <div class="form-group">
@@ -239,5 +310,217 @@
             <button type="submit">Registrovat firmu</button>
         </form>
     </div>
+
+    <script>
+        // Autocomplete funkcionalita pro našeptávač firem
+        (function() {
+            const firmaInput = document.getElementById('firma');
+            const icoInput = document.getElementById('ico');
+            const dicInput = document.getElementById('dic');
+            const adresaInput = document.getElementById('adresa');
+            const suggestionsBox = document.getElementById('suggestions');
+
+            let debounceTimer;
+            let currentSuggestions = [];
+            let selectedIndex = -1;
+
+            // Debounce funkce pro optimalizaci API volání
+            function debounce(func, delay) {
+                return function(...args) {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => func.apply(this, args), delay);
+                };
+            }
+
+            // Funkce pro volání API přes proxy
+            async function fetchSuggestions(query) {
+                if (query.length < 3) {
+                    hideSuggestions();
+                    return;
+                }
+
+                showLoading();
+
+                try {
+                    const response = await fetch('merk-proxy.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: query,
+                            suggestBy: 'name'
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.error) {
+                        showError(data.error);
+                        return;
+                    }
+
+                    currentSuggestions = data.suggestions || [];
+                    displaySuggestions(currentSuggestions);
+                } catch (error) {
+                    showError('Chyba při načítání návrhů: ' + error.message);
+                }
+            }
+
+            // Zobrazení načítání
+            function showLoading() {
+                suggestionsBox.innerHTML = '<div class="loading">Načítám návrhy...</div>';
+                suggestionsBox.classList.add('show');
+            }
+
+            // Zobrazení chyby
+            function showError(message) {
+                suggestionsBox.innerHTML = `<div class="no-results">${message}</div>`;
+                suggestionsBox.classList.add('show');
+            }
+
+            // Zobrazení návrhů
+            function displaySuggestions(suggestions) {
+                selectedIndex = -1;
+
+                if (suggestions.length === 0) {
+                    suggestionsBox.innerHTML = '<div class="no-results">Žádné výsledky</div>';
+                    suggestionsBox.classList.add('show');
+                    return;
+                }
+
+                let html = '';
+                suggestions.forEach((company, index) => {
+                    html += `
+                        <div class="suggestion-item" data-index="${index}">
+                            <div class="suggestion-name">${escapeHtml(company.name)}</div>
+                            <div class="suggestion-details">
+                                IČO: ${escapeHtml(company.ico || 'N/A')} |
+                                ${escapeHtml(company.full_address || company.address || 'Adresa neuvedena')}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                suggestionsBox.innerHTML = html;
+                suggestionsBox.classList.add('show');
+
+                // Přidání click event listenerů
+                suggestionsBox.querySelectorAll('.suggestion-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const index = parseInt(item.dataset.index);
+                        selectSuggestion(index);
+                    });
+                });
+            }
+
+            // Skrytí návrhů
+            function hideSuggestions() {
+                suggestionsBox.classList.remove('show');
+                suggestionsBox.innerHTML = '';
+                currentSuggestions = [];
+                selectedIndex = -1;
+            }
+
+            // Výběr návrhu
+            function selectSuggestion(index) {
+                if (index >= 0 && index < currentSuggestions.length) {
+                    const company = currentSuggestions[index];
+
+                    firmaInput.value = company.name;
+                    icoInput.value = company.ico || '';
+                    dicInput.value = company.dic || '';
+                    adresaInput.value = company.full_address || company.address || '';
+
+                    hideSuggestions();
+                    firmaInput.focus();
+                }
+            }
+
+            // Navigace klávesnicí
+            function navigateSuggestions(direction) {
+                const items = suggestionsBox.querySelectorAll('.suggestion-item');
+                if (items.length === 0) return;
+
+                // Odstranění předchozího výběru
+                if (selectedIndex >= 0) {
+                    items[selectedIndex].classList.remove('active');
+                }
+
+                // Aktualizace indexu
+                selectedIndex += direction;
+
+                if (selectedIndex < 0) {
+                    selectedIndex = -1;
+                } else if (selectedIndex >= items.length) {
+                    selectedIndex = items.length - 1;
+                }
+
+                // Přidání nového výběru
+                if (selectedIndex >= 0) {
+                    items[selectedIndex].classList.add('active');
+                    items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            // Escape HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Event listenery
+            firmaInput.addEventListener('input', debounce(function(e) {
+                const query = e.target.value.trim();
+                fetchSuggestions(query);
+            }, 300));
+
+            firmaInput.addEventListener('keydown', function(e) {
+                const isOpen = suggestionsBox.classList.contains('show');
+
+                switch(e.key) {
+                    case 'ArrowDown':
+                        if (isOpen) {
+                            e.preventDefault();
+                            navigateSuggestions(1);
+                        }
+                        break;
+                    case 'ArrowUp':
+                        if (isOpen) {
+                            e.preventDefault();
+                            navigateSuggestions(-1);
+                        }
+                        break;
+                    case 'Enter':
+                        if (isOpen && selectedIndex >= 0) {
+                            e.preventDefault();
+                            selectSuggestion(selectedIndex);
+                        }
+                        break;
+                    case 'Escape':
+                        if (isOpen) {
+                            e.preventDefault();
+                            hideSuggestions();
+                        }
+                        break;
+                }
+            });
+
+            // Kliknutí mimo autocomplete zavře návrhy
+            document.addEventListener('click', function(e) {
+                if (!firmaInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                    hideSuggestions();
+                }
+            });
+
+            // Focus na input otevře návrhy, pokud už existují
+            firmaInput.addEventListener('focus', function() {
+                if (currentSuggestions.length > 0 && firmaInput.value.length >= 3) {
+                    suggestionsBox.classList.add('show');
+                }
+            });
+        })();
+    </script>
 </body>
 </html>
